@@ -4,7 +4,13 @@ services:
     image: docker.io/cloudflare/cloudflared:latest
     container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-cloudflared
     restart: always
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    # Token via env, never the command line (keeps it out of ps/docker inspect).
+    command: tunnel --no-autoupdate run
+    environment:
+      - TZ=${TZ}
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    security_opt:
+      - no-new-privileges:true
     networks:
       - tunnel
 
@@ -13,6 +19,8 @@ services:
     image: docker.io/library/postgres:18.1
     container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-postgresql
     restart: always
+    security_opt:
+      - no-new-privileges:true
     environment:
       - TZ=${TZ}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -39,6 +47,8 @@ services:
     image: docker.io/adminer:5.4.2
     container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-adminer
     restart: always
+    security_opt:
+      - no-new-privileges:true
     profiles:
       - adminer
     depends_on:
@@ -59,6 +69,8 @@ services:
     image: registry.0byt.es/aegis-dashboard-core:latest
     container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-core
     restart: always
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       postgresql:
         condition: service_healthy
@@ -71,6 +83,7 @@ services:
       - AEGIS_DASHBOARD_DB_HOST=${AEGIS_DASHBOARD_DB_HOST}
       - AEGIS_DASHBOARD_DB_USER=${AEGIS_DASHBOARD_DB_USER}
       - AEGIS_DASHBOARD_MAX_FILE_STORAGE=${AEGIS_DASHBOARD_MAX_FILE_STORAGE}
+      - AEGIS_DASHBOARD_MAX_FILE_SIZE=${AEGIS_DASHBOARD_MAX_FILE_SIZE}
       - AEGIS_DASHBOARD_OIDC_ISSUER=${AEGIS_DASHBOARD_OIDC_ISSUER}
       - AEGIS_DASHBOARD_OIDC_JWKS_URI=${AEGIS_DASHBOARD_OIDC_JWKS_URI}
       - AEGIS_DASHBOARD_OIDC_CLIENT_ID=${AEGIS_DASHBOARD_OIDC_CLIENT_ID}
@@ -93,6 +106,8 @@ services:
     image: registry.0byt.es/aegis-dashboard-ui:latest
     container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-ui
     restart: always
+    security_opt:
+      - no-new-privileges:true
     environment:
       - TZ=${TZ}
       - VITE_API_BASE_URL=${AEGIS_DASHBOARD_API_URI}
@@ -108,6 +123,8 @@ services:
     image: docker.io/library/caddy:latest
     container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-caddy
     restart: always
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${AEGIS_DASHBOARD_HTTP_PORT}:${AEGIS_DASHBOARD_HTTP_PORT}"
     volumes:
@@ -120,9 +137,11 @@ services:
       - AEGIS_DASHBOARD_HTTP_PORT=${AEGIS_DASHBOARD_HTTP_PORT}
       - AEGIS_DASHBOARD_IP_MANAGEMENT=${AEGIS_DASHBOARD_IP_MANAGEMENT}
       - AEGIS_DASHBOARD_IP_WHITELIST=${AEGIS_DASHBOARD_IP_WHITELIST}
+      - AEGIS_DASHBOARD_TRUSTED_PROXY_CIDR=${AEGIS_DASHBOARD_TRUSTED_PROXY_CIDR}
     networks:
       - frontend
       - backend
+      - tunnel
 
 
 networks:
@@ -132,6 +151,10 @@ networks:
     external: false
   tunnel:
     external: false
+    ipam:
+      config:
+        # Fixed subnet so Caddy can trust exactly the tunnel (cloudflared).
+        - subnet: ${AEGIS_DASHBOARD_TRUSTED_PROXY_CIDR}
 
 
 secrets:

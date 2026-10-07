@@ -1,0 +1,145 @@
+services:
+
+  cloudflared:
+    image: docker.io/cloudflare/cloudflared:latest
+    container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-cloudflared
+    restart: always
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - tunnel
+
+
+  postgresql:
+    image: docker.io/library/postgres:18.1
+    container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-postgresql
+    restart: always
+    environment:
+      - TZ=${TZ}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/postgres_password
+      - AEGIS_DASHBOARD_DB_NAME=${AEGIS_DASHBOARD_DB_NAME}
+      - AEGIS_DASHBOARD_DB_USER=${AEGIS_DASHBOARD_DB_USER}
+    secrets:
+      - postgres_password
+      - aegis_dashboard_db_password
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - "$PWD/config-postgresql/init-dashboard.sh:/docker-entrypoint-initdb.d/init-dashboard.sh:ro"
+      - "$PWD/data-postgresql:/var/lib/postgresql"
+    networks:
+      - backend
+
+
+  adminer:
+    image: docker.io/adminer:5.4.2
+    container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-adminer
+    restart: always
+    profiles:
+      - adminer
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      - ADMINER_DEFAULT_DRIVER=pgsql
+      - ADMINER_DEFAULT_DB=${AEGIS_DASHBOARD_DB_NAME}
+      - ADMINER_DEFAULT_SERVER=${AEGIS_DASHBOARD_DB_HOST}
+      - ADMINER_PLUGINS=dump-json dump-zip edit-foreign json-column tables-filter
+      - ADMINER_DESIGN=hever
+    networks:
+      - backend
+      - frontend
+
+
+  aegis-dashboard-core:
+    image: registry.0byt.es/aegis-dashboard-core:latest
+    container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-core
+    restart: always
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    volumes:
+      - "$PWD/data-core:/data"
+    environment:
+      - TZ=${TZ}
+      - AEGIS_DASHBOARD_ORG_ID=${AEGIS_DASHBOARD_ORG_ID}
+      - AEGIS_DASHBOARD_DB_NAME=${AEGIS_DASHBOARD_DB_NAME}
+      - AEGIS_DASHBOARD_DB_HOST=${AEGIS_DASHBOARD_DB_HOST}
+      - AEGIS_DASHBOARD_DB_USER=${AEGIS_DASHBOARD_DB_USER}
+      - AEGIS_DASHBOARD_MAX_FILE_STORAGE=${AEGIS_DASHBOARD_MAX_FILE_STORAGE}
+      - AEGIS_DASHBOARD_OIDC_ISSUER=${AEGIS_DASHBOARD_OIDC_ISSUER}
+      - AEGIS_DASHBOARD_OIDC_JWKS_URI=${AEGIS_DASHBOARD_OIDC_JWKS_URI}
+      - AEGIS_DASHBOARD_OIDC_CLIENT_ID=${AEGIS_DASHBOARD_OIDC_CLIENT_ID}
+      - AEGIS_DASHBOARD_ADMIN_EMAILS=${AEGIS_DASHBOARD_ADMIN_EMAILS}
+      # Jira requirements plugin (optional — drop jira_requirements.py into data-core/plugins/
+      # to enable; take it from core/example-plugins/ in the repo, or from /example-plugins/
+      # inside the core image. Uncomment these, the secret below, and its entry in the top-level
+      # secrets: block if the plugin is used):
+      # - JIRA_BASE_URL=${JIRA_BASE_URL}
+      # - JIRA_USER_EMAIL=${JIRA_USER_EMAIL}
+    secrets:
+      - aegis_dashboard_db_password
+      # - jira_api_token
+    networks:
+      - backend
+      - frontend
+
+
+  aegis-dashboard-ui:
+    image: registry.0byt.es/aegis-dashboard-ui:latest
+    container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-ui
+    restart: always
+    environment:
+      - TZ=${TZ}
+      - VITE_API_BASE_URL=${AEGIS_DASHBOARD_API_URI}
+      - VITE_OIDC_AUTHORITY=${AEGIS_DASHBOARD_OIDC_ISSUER}
+      - VITE_OIDC_CLIENT_ID=${AEGIS_DASHBOARD_OIDC_CLIENT_ID}
+      - VITE_OIDC_REDIRECT_URI=${AEGIS_DASHBOARD_OIDC_REDIRECT_URI}
+      - VITE_OIDC_POST_LOGOUT_REDIRECT_URI=${AEGIS_DASHBOARD_OIDC_LOGOUT_URI}
+    networks:
+      - frontend
+
+
+  caddy:
+    image: docker.io/library/caddy:latest
+    container_name: ${AEGIS_DASHBOARD_ORG_ID}-aegis-dashboard-caddy
+    restart: always
+    ports:
+      - "${AEGIS_DASHBOARD_HTTP_PORT}:${AEGIS_DASHBOARD_HTTP_PORT}"
+    volumes:
+      - "$PWD/config-caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - "$PWD/data-caddy:/data"
+      - "$PWD/data-caddy/config:/config"
+    environment:
+      - TZ=${TZ}
+      - AEGIS_DASHBOARD_DOMAIN=${AEGIS_DASHBOARD_DOMAIN}
+      - AEGIS_DASHBOARD_HTTP_PORT=${AEGIS_DASHBOARD_HTTP_PORT}
+      - AEGIS_DASHBOARD_IP_MANAGEMENT=${AEGIS_DASHBOARD_IP_MANAGEMENT}
+      - AEGIS_DASHBOARD_IP_WHITELIST=${AEGIS_DASHBOARD_IP_WHITELIST}
+    networks:
+      - frontend
+      - backend
+
+
+networks:
+  backend:
+    external: false
+  frontend:
+    external: false
+  tunnel:
+    external: false
+
+
+secrets:
+  aegis_dashboard_db_password:
+    file: ./secrets/aegis_dashboard_db_password
+  postgres_password:
+    file: ./secrets/postgres_password
+  # Required by the Jira requirements plugin (see core/example-plugins/jira_requirements.py,
+  # or /example-plugins/ inside the core image) — uncomment if the plugin is used:
+  # jira_api_token:
+  #   file: ./secrets/jira_api_token

@@ -1,0 +1,78 @@
+# Global: trust the Cloudflare Tunnel proxy so `remote_ip` evaluates the real
+# client IP (from X-Forwarded-For), not the cloudflared container. Only the
+# tunnel subnet is trusted — direct clients cannot spoof the header.
+{
+	servers {
+		trusted_proxies static {$AEGIS_DASHBOARD_TRUSTED_PROXY_CIDR}
+		client_ip_headers X-Forwarded-For
+	}
+}
+
+# Dashboard gateway (Caddy). Replaces the legacy APISIX edge.
+#
+# One HTTPS origin serves the whole stack; the hostname and port come from
+# AEGIS_DASHBOARD_DOMAIN / AEGIS_DASHBOARD_HTTP_PORT (passed through compose).
+# `tls internal` uses Caddy's local CA, so the browser warns on first visit
+# (same as the sibling aegis stack) — click through once.
+#
+# Access control mirrors the target design:
+#   AEGIS_DASHBOARD_IP_MANAGEMENT — management surfaces (/db, /api/docs)
+#   AEGIS_DASHBOARD_IP_WHITELIST  — the application (/api/* and the UI)
+# Both are space-separated CIDRs.
+
+{$AEGIS_DASHBOARD_DOMAIN}:{$AEGIS_DASHBOARD_HTTP_PORT} {
+	tls internal
+
+	# Defence-in-depth per-request body cap. The per-*file* limit (across the
+	# UI's 50 MB chunks) is enforced in core; this bounds a single request.
+	request_body {
+		max_size 64MB
+	}
+
+	# client_ip (not remote_ip) so the IP is taken from X-Forwarded-For when the
+	# request comes from a trusted proxy (the tunnel).
+	@notadmin not client_ip {$AEGIS_DASHBOARD_IP_MANAGEMENT}
+	@denied not client_ip {$AEGIS_DASHBOARD_IP_WHITELIST}
+
+	# Adminer — management IPs only
+	handle_path /db/* {
+		respond @notadmin 403
+		reverse_proxy adminer:8080
+	}
+	handle /db {
+		respond @notadmin 403
+		redir /db/ permanent
+	}
+
+	# API docs — management IPs only
+	handle /api/docs* {
+		respond @notadmin 403
+		reverse_proxy aegis-dashboard-core:8000
+	}
+	handle /api/openapi.json {
+		respond @notadmin 403
+		reverse_proxy aegis-dashboard-core:8000
+	}
+
+	# API — application allowlist. JWT is validated by core; the findings-import
+	# route instead authenticates with an X-Api-Key (user key) inside core.
+	handle /api/* {
+		respond @denied 403
+		reverse_proxy aegis-dashboard-core:8000
+	}
+
+	# UI (SPA) — application allowlist
+	handle {
+		respond @denied 403
+		reverse_proxy aegis-dashboard-ui:80
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+		-X-Powered-By
+	}
+}

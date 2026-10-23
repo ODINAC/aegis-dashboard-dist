@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS organisations (
 CREATE TABLE IF NOT EXISTS environments (
     org_id VARCHAR(10) NOT NULL,
     environment VARCHAR(64) NOT NULL,
-    business_area VARCHAR(64),
+    business_unit VARCHAR(64),
     importance VARCHAR(32),
     contact1_name VARCHAR(64),
     contact1_email VARCHAR(64),
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS projects (
     live_date DATE NULL,
     source_code_included BOOLEAN NULL,
     remote_assessment BOOLEAN NULL,
-    business_area VARCHAR(64) NULL,
+    business_unit VARCHAR(64) NULL,
     importance VARCHAR(32) NULL,
     project_start_date DATE NULL,
     project_report_date DATE NULL,
@@ -244,6 +244,7 @@ INSERT INTO schema_migrations (version, applied_at) VALUES
     ('2026-09-27-add-user-keys', extract(epoch from now())::bigint),
     ('2026-10-23-add-environment-business-area-priority', extract(epoch from now())::bigint),
     ('2026-10-23-add-project-business-area-priority', extract(epoch from now())::bigint),
+    ('2026-10-23-rename-business-area-to-business-unit', extract(epoch from now())::bigint),
     ('2026-10-23-rename-priority-to-importance', extract(epoch from now())::bigint)
 ON CONFLICT (version) DO NOTHING;
 EOF

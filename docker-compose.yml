@@ -115,6 +115,9 @@ services:
       - VITE_OIDC_CLIENT_ID=${AEGIS_DASHBOARD_OIDC_CLIENT_ID}
       - VITE_OIDC_REDIRECT_URI=${AEGIS_DASHBOARD_OIDC_REDIRECT_URI}
       - VITE_OIDC_POST_LOGOUT_REDIRECT_URI=${AEGIS_DASHBOARD_OIDC_LOGOUT_URI}
+    #volumes:
+    #  - "$PWD/config-ui/logo.svg:/usr/share/nginx/html/logo.svg:ro,Z"
+    #  - "$PWD/config-ui/logo.png:/usr/share/nginx/html/icon.png:ro,Z"
     networks:
       - frontend
 

@@ -128,8 +128,8 @@ services:
     restart: always
     security_opt:
       - no-new-privileges:true
-    ports:
-      - "${AEGIS_DASHBOARD_HTTP_PORT}:${AEGIS_DASHBOARD_HTTP_PORT}"
+    #ports:
+    #  - "${AEGIS_DASHBOARD_HTTP_PORT}:${AEGIS_DASHBOARD_HTTP_PORT}"
     volumes:
       - "$PWD/config-caddy/Caddyfile:/etc/caddy/Caddyfile:ro"
       - "$PWD/data-caddy:/data"

@@ -241,7 +241,7 @@ INSERT INTO schema_migrations (version, applied_at) VALUES
     ('2026-06-19-widen-project-name', extract(epoch from now())::bigint),
     ('2026-07-06-add-file-checksums', extract(epoch from now())::bigint),
     ('2026-09-27-add-users-and-user-orgs', extract(epoch from now())::bigint),
-    ('2026-09-27-add-user-keys', extract(epoch from now())::bigint),
+    ('2026-09-28-add-user-keys', extract(epoch from now())::bigint),
     ('2026-10-23-add-environment-business-area-priority', extract(epoch from now())::bigint),
     ('2026-10-23-add-project-business-area-priority', extract(epoch from now())::bigint),
     ('2026-10-23-rename-business-area-to-business-unit', extract(epoch from now())::bigint),
